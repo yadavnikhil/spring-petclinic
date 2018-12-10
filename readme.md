@@ -129,3 +129,75 @@ The Spring PetClinic sample application is released under version 2.0 of the [Ap
 [spring-petclinic-graphql]: https://github.com/spring-petclinic/spring-petclinic-graphql
 [spring-petclinic-kotlin]: https://github.com/spring-petclinic/spring-petclinic-kotlin
 [spring-petclinic-rest]: https://github.com/spring-petclinic/spring-petclinic-rest
+
+
+# Instructions to run
+
+## Prerequisites
+### Jenkins base image
+* We are using docker-maven-plugin to build docker images & running docker agent slave in Jenkinsfile pipeline.
+* To be able to run above, we need docker client present in Jenkins base image.
+
++ To build it, use dockerjenkins/Dockerfile
+- It uses jenkins/jenkins:lts base image
+- Installs docker-ce
+- Build by using below command & push to your required repository.
+
+```bash
+cd dockerjenkins
+docker build -t dockerjenkins .
+```
+
+- For reference a built image can be used from below:
+```bash
+docker pull nikhily/dockerjenkins:latest
+```
+
+- This docker image is run with persistent volumes so data persists after restarts of docker container OR EC2 Instance
+
+## AWS Infrastructure Creation
+* Create required infrastructure in AWS using CFN template
+```bash
+aws_cfn/cfn_create.json
+```
++ What will it create:
+    - VPC with CIDR 172.20.0.0/16
+    - 2 Subnets
+        - Public with CIDR 172.20.10.0/24
+        - Private with CIDR 172.20.20.0/24
+    - Route Tables
+        - Public associated with Public Subnet
+        - Private associated with Private Subnet
+    - Internet Gateway
+        - Configured in Public Route table for internet access: DestinationCidrBlock: 0.0.0.0/0
+    - NAT Gateway
+        - Created in Public subnet with Public route association
+        - Configured in Private Route table for internet access: DestinationCidrBlock: 0.0.0.0/0
+    - 2 EC2 Instances
+        - CICDBox: EC2 Instance in Public subnet with user-data to install docker & run custom dockerjenkins base image
+        - Application Intsance: EC2 Instance in Private subnet with user-data to install docker
+     - Output
+        - Jenkins URL running on CICDBox in format http://<PublicIp>:8080
+
+
+## Jenkins Configuration
+### Firstime Startup Configuration
+* Please follow instructions mentioned in its official documentation: https://github.com/jenkinsci/docker
+- Login using admin credentials you get in container logs
+- Install suggested Plugins - should be enough to run our pipeline
+
+### Job Configuration
++ Add new Item for Pipeline configuration
+    - Name: as desired
+    - SCM URL: https://github.com/yadavnikhil/spring-petclinic.git
+    - Pipeline as below:
+    ![image info](./pipeline.JPG)
+
+## Run Build in Jenkins
+    - Get sources from github
+    - Create docker agent for maven:3-alpine
+    - Compile sources
+    - Build docker image
+    - Run & check docker image starts correctly. Stop when done
+    - Push image to dockerhub
+
